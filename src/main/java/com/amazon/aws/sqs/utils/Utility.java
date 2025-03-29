@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 
 @Component
 public class Utility {
@@ -59,10 +60,15 @@ public class Utility {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+            objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
             jsonString = objectMapper.writeValueAsString(object);
         } catch (JsonProcessingException e) {
             throw new SqsServiceException(Constants.INTERNAL_SERVER_ERROR_STATUS_CODE, e.getMessage());
         }
         return jsonString;
+    }
+
+    public static Map<String, Object> convertObjectToMap(Object object){
+        return new ObjectMapper().convertValue(object, Map.class);
     }
 }

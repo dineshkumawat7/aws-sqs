@@ -1,10 +1,10 @@
 package com.amazon.aws.sqs.service.impl;
 
 import com.amazon.aws.sqs.dto.Response;
+import com.amazon.aws.sqs.exception.SqsServiceException;
 import com.amazon.aws.sqs.service.SqsService;
 import com.amazon.aws.sqs.utils.Constants;
 import com.amazon.aws.sqs.utils.Utility;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +14,6 @@ import software.amazon.awssdk.services.sqs.model.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class SqsServiceImpl implements SqsService {
@@ -25,13 +24,31 @@ public class SqsServiceImpl implements SqsService {
     private SqsClient sqsClient;
 
     @Override
-    public Response<?> createQueue(String queueName) {
+    public Response<Map<QueueAttributeName, String>> createQueue(String queueName) {
         String msg = null;
-        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder().queueName(queueName).build();
-        CreateQueueResponse createQueueResponse = sqsClient.createQueue(createQueueRequest);
+        GetQueueAttributesResponse queueAttributesResponse = null;
+        CreateQueueResponse createQueueResponse = null;
+        try {
+            CreateQueueRequest createQueueRequest = CreateQueueRequest.builder().queueName(queueName).build();
+            createQueueResponse = sqsClient.createQueue(createQueueRequest);
+        } catch (QueueNameExistsException e) {
+            throw new SqsServiceException(Constants.BAD_REQUEST_STATUS_CODE, e.getMessage());
+        } finally {
+            GetQueueUrlRequest queueUrlRequest = GetQueueUrlRequest.builder()
+                    .queueName(queueName)
+                    .build();
+            GetQueueUrlResponse queueUrlResponse = sqsClient.getQueueUrl(queueUrlRequest);
+            String queueUrl = queueUrlResponse.queueUrl();
+            GetQueueAttributesRequest queueAttributesRequest = GetQueueAttributesRequest.builder()
+                    .queueUrl(queueUrl)
+                    .attributeNamesWithStrings(QueueAttributeName.ALL.toString())
+                    .build();
+            queueAttributesResponse = sqsClient.getQueueAttributes(queueAttributesRequest);
+        }
+        String queueUrl = createQueueResponse.queueUrl();
         logger.info("Queue created: {}", createQueueResponse.queueUrl());
-        msg = String.format("Queue created successfully: %s", createQueueResponse.queueUrl());
-        return new Response<>(Utility.getCurrentDate(), Constants.CREATED_STATUS_CODE, Constants.SUCCESS_TAG, msg, null);
+        msg = String.format("Queue created successfully: %s", queueUrl.substring(queueUrl.lastIndexOf("/") + 1));
+        return new Response<>(Utility.getCurrentDate(), Constants.CREATED_STATUS_CODE, Constants.SUCCESS_TAG, msg, queueAttributesResponse.attributes());
     }
 
     @Override
@@ -47,33 +64,42 @@ public class SqsServiceImpl implements SqsService {
     @Override
     public Response<Map<QueueAttributeName, String>> queueInfo(String queueName) {
         String msg = null;
-        GetQueueUrlRequest queueUrlRequest = GetQueueUrlRequest.builder()
-                .queueName(queueName)
-                .build();
-        GetQueueUrlResponse queueUrlResponse = GetQueueUrlResponse.builder().build();
-        String queueUrl = queueUrlResponse.queueUrl();
-        GetQueueAttributesRequest queueAttributesRequest = GetQueueAttributesRequest.builder()
-                .queueUrl(queueUrl)
-                .attributeNamesWithStrings(QueueAttributeName.ALL.toString())
-                .build();
-        GetQueueAttributesResponse queueAttributesResponse = sqsClient.getQueueAttributes(queueAttributesRequest);
-        System.out.println(queueAttributesResponse.attributes());
-        msg = "Fetching queue information successfully";
+        GetQueueAttributesResponse queueAttributesResponse = null;
+        try {
+            GetQueueUrlRequest queueUrlRequest = GetQueueUrlRequest.builder()
+                    .queueName(queueName)
+                    .build();
+            GetQueueUrlResponse queueUrlResponse = sqsClient.getQueueUrl(queueUrlRequest);
+            String queueUrl = queueUrlResponse.queueUrl();
+            GetQueueAttributesRequest queueAttributesRequest = GetQueueAttributesRequest.builder()
+                    .queueUrl(queueUrl)
+                    .attributeNamesWithStrings(QueueAttributeName.ALL.toString())
+                    .build();
+            queueAttributesResponse = sqsClient.getQueueAttributes(queueAttributesRequest);
+            msg = "Fetching queue information successfully";
+        } catch (QueueDoesNotExistException e) {
+            throw new SqsServiceException(Constants.BAD_REQUEST_STATUS_CODE, e.getMessage());
+        }
         return new Response<>(Utility.getCurrentDate(), Constants.OK_STATUS_CODE, Constants.SUCCESS_TAG, msg, queueAttributesResponse.attributes());
     }
 
     @Override
     public Response<?> deleteQueue(String queueName) {
         String msg = null;
-        GetQueueUrlRequest queueUrlRequest = GetQueueUrlRequest.builder()
-                .queueName(queueName)
-                .build();
-        GetQueueUrlResponse queueUrlResponse = GetQueueUrlResponse.builder().build();
-        String queueUrl = queueUrlResponse.queueUrl();
-        DeleteQueueRequest deleteQueueRequest = DeleteQueueRequest.builder()
-                .queueUrl(queueUrl)
-                .build();
-        sqsClient.deleteQueue(deleteQueueRequest);
+        try {
+            GetQueueUrlRequest queueUrlRequest = GetQueueUrlRequest.builder()
+                    .queueName(queueName)
+                    .build();
+            GetQueueUrlResponse queueUrlResponse = sqsClient.getQueueUrl(queueUrlRequest);
+            String queueUrl = queueUrlResponse.queueUrl();
+            DeleteQueueRequest deleteQueueRequest = DeleteQueueRequest.builder()
+                    .queueUrl(queueUrl)
+                    .build();
+            sqsClient.deleteQueue(deleteQueueRequest);
+            msg = String.format("SQS queue deleted successfully: %s", queueName);
+        } catch (QueueDoesNotExistException e) {
+            throw new SqsServiceException(Constants.BAD_REQUEST_STATUS_CODE, e.getMessage());
+        }
         return new Response<>(Utility.getCurrentDate(), Constants.OK_STATUS_CODE, Constants.SUCCESS_TAG, msg, null);
     }
 

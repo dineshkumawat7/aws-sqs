@@ -23,7 +23,7 @@ public class SqsMessageServiceImpl implements SqsMessageService {
         GetQueueUrlRequest queueUrlRequest = GetQueueUrlRequest.builder()
                 .queueName(queueName)
                 .build();
-        GetQueueUrlResponse queueUrlResponse = GetQueueUrlResponse.builder().build();
+        GetQueueUrlResponse queueUrlResponse = sqsClient.getQueueUrl(queueUrlRequest);
         String queueUrl = queueUrlResponse.queueUrl();
 
         SendMessageRequest sendMessageRequest = SendMessageRequest.builder()
@@ -41,7 +41,7 @@ public class SqsMessageServiceImpl implements SqsMessageService {
         GetQueueUrlRequest queueUrlRequest = GetQueueUrlRequest.builder()
                 .queueName(queueName)
                 .build();
-        GetQueueUrlResponse queueUrlResponse = GetQueueUrlResponse.builder().build();
+        GetQueueUrlResponse queueUrlResponse = sqsClient.getQueueUrl(queueUrlRequest);
         String queueUrl = queueUrlResponse.queueUrl();
         ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
                 .queueUrl(queueUrl)
